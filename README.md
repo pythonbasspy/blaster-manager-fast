@@ -10,8 +10,6 @@ O **BlasterManager** é uma solução ERP compacta desenvolvida para resolver a 
 
 A aplicação foi projetada para funcionar **offline-first** e sem dependência de servidores complexos (Backendless), permitindo que técnicos em campo (Blasters) criem orçamentos, gerenciem estoque e emitam documentos PDF diretamente de seus dispositivos móveis, mesmo em locais remotos sem internet.
 
-👉 **[Acesse a Aplicação Online Aqui](SEU_LINK_DO_GITHUB_PAGES_AQUI)**
-
 ## 🚀 Funcionalidades Principais
 
 * **Gestão de Estoque:** Controle de entrada e saída de materiais com cálculo de custo médio.
@@ -44,5 +42,5 @@ O projeto foi construído utilizando o conceito de **Single File Component** par
 Este projeto foi desenvolvido para fins de portfólio e utilidade pública para atender uma demanda específica da comunidade de eventos, focada em blasters.
 
 ---
-Desenvolvido por **[pythonbasspy]**
+## **Desenvolvido por **[pythonbasspy]
 [https://www.linkedin.com/in/elias-rodrigues-de-oliveira-filho-43503123/]

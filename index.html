@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BlasterManager V3.8 (Enterprise)</title>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        [v-cloak] { display: none; }
+        
+        #loading-screen { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #dc2626; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .card { background: white; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 1rem; overflow: hidden; }
+        .btn { padding: 12px; border-radius: 8px; font-weight: bold; text-align: center; border: none; width: 100%; cursor: pointer; transition: opacity 0.2s; }
+        .btn:active { opacity: 0.8; }
+        .btn-primary { background-color: #dc2626; color: white; }
+        .input-std { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; box-sizing: border-box; }
+        .label-std { display: block; font-size: 0.75rem; font-weight: bold; color: #64748b; margin-bottom: 4px; margin-top: 8px; text-transform: uppercase; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
+        
+        .nav-bar { position: fixed; bottom: 0; width: 100%; max-width: 500px; background: white; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-around; padding: 10px 0 25px 0; z-index: 40; left: 50%; transform: translateX(-50%); }
+        .nav-item { display: flex; flex-direction: column; items-center; font-size: 0.7rem; color: #9ca3af; background: none; border: none; }
+        .nav-item.active { color: #dc2626; font-weight: bold; }
+        .nav-item i { font-size: 1.2rem; margin-bottom: 4px; }
+    </style>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<div id="loading-screen">
+    <div class="spinner"></div>
+    <h1 class="text-xl font-bold text-slate-800">BlasterManager</h1>
+    <p class="text-sm text-gray-500 mt-2">Carregando V3.8...</p>
+</div>
+
+<div id="app" v-cloak class="pb-24 max-w-[500px] mx-auto bg-gray-50 min-h-screen relative shadow-2xl">
+    
+    <div class="bg-slate-900 text-white p-4 sticky top-0 z-50 flex justify-between items-center shadow-lg">
+        <h1 class="text-lg font-bold tracking-wider"><i class="fa-solid fa-fire mr-2 text-red-500"></i>BLASTER<span class="font-light">MGR</span></h1>
+        <div class="flex gap-2">
+            <button @click="currentTab = 'settings'" class="bg-slate-700 px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-slate-600 transition">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+            <button v-if="currentTab === 'dashboard'" @click="startNewBudget" class="bg-red-600 px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-red-500 transition">
+                <i class="fa-solid fa-plus mr-1"></i> NOVO
+            </button>
+        </div>
+    </div>
+
+    <div v-if="currentTab === 'dashboard'" class="p-4 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+            <div class="card p-4 border-l-4 border-green-500">
+                <p class="text-[10px] text-gray-400 font-bold uppercase">Lucro Líquido</p>
+                <p class="text-xl font-bold text-slate-800">R$ {{ formatMoney(kpis.totalProfit) }}</p>
+            </div>
+            <div class="card p-4 border-l-4 border-blue-500">
+                <p class="text-[10px] text-gray-400 font-bold uppercase">Confirmados</p>
+                <p class="text-xl font-bold text-slate-800">{{ kpis.confirmedCount }} <span class="text-xs font-normal text-gray-400">shows</span></p>
+            </div>
+        </div>
+
+        <div class="card p-4 flex justify-between items-center bg-yellow-50 border border-yellow-100">
+            <div>
+                <p class="text-[10px] text-yellow-700 font-bold uppercase">Em Negociação</p>
+                <p class="text-lg font-bold text-yellow-800">R$ {{ formatMoney(kpis.pendingValue) }}</p>
+            </div>
+            <span class="text-2xl font-bold text-yellow-300">{{ kpis.pendingCount }}</span>
+        </div>
+
+        <div v-if="nextShow" class="mt-2">
+            <h2 class="text-xs font-bold text-slate-500 mb-2 uppercase ml-1">Próximo Evento</h2>
+            <div class="card p-4 border-l-4 border-slate-800 cursor-pointer hover:bg-gray-50 transition" @click="openBudgetDetails(nextShow)">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="font-bold text-lg text-slate-800">{{ nextShow.clientName }}</h3>
+                        <p class="text-sm text-gray-600"><i class="fa-regular fa-calendar mr-1"></i> {{ formatDate(nextShow.date) }}</p>
+                        <p class="text-sm text-gray-600"><i class="fa-solid fa-map-pin mr-1"></i> {{ nextShow.location }}</p>
+                    </div>
+                    <div class="bg-slate-800 text-white text-[10px] px-2 py-1 rounded font-bold">
+                        {{ getDaysUntil(nextShow.date) }} dias
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-else class="text-center py-8 text-gray-400 text-sm">Nenhum show confirmado.</div>
+    </div>
+
+    <div v-if="currentTab === 'history'" class="p-4 space-y-4">
+        <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            <button @click="filterStatus = 'all'" :class="filterStatus === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600'" class="px-4 py-1.5 rounded-full text-xs font-bold border whitespace-nowrap shadow-sm">Todos</button>
+            <button @click="filterStatus = 'Pendente'" :class="filterStatus === 'Pendente' ? 'bg-yellow-500 text-white' : 'bg-white text-slate-600'" class="px-4 py-1.5 rounded-full text-xs font-bold border whitespace-nowrap shadow-sm">Pendentes</button>
+            <button @click="filterStatus = 'Confirmado'" :class="filterStatus === 'Confirmado' ? 'bg-green-600 text-white' : 'bg-white text-slate-600'" class="px-4 py-1.5 rounded-full text-xs font-bold border whitespace-nowrap shadow-sm">Confirmados</button>
+        </div>
+
+        <div v-for="budget in filteredBudgets" :key="budget.id" @click="openBudgetDetails(budget)" class="card p-4 border-l-4 cursor-pointer hover:bg-gray-50 transition relative"
+             :class="{'border-yellow-400': budget.status === 'Pendente', 'border-green-500': budget.status === 'Confirmado', 'border-gray-300': budget.status === 'Cancelado'}">
+            <div class="flex justify-between items-center mb-1">
+                <span class="font-bold text-slate-800 truncate pr-2">{{ budget.clientName }}</span>
+                <span class="badge" :class="{'bg-yellow-100 text-yellow-800': budget.status === 'Pendente', 'bg-green-100 text-green-800': budget.status === 'Confirmado', 'bg-gray-200 text-gray-600': budget.status === 'Cancelado'}">
+                    {{ budget.status }}
+                </span>
+            </div>
+            <div class="flex justify-between text-xs text-gray-500">
+                <span>{{ formatDate(budget.date) }}</span>
+                <span class="font-mono">R$ {{ formatMoney(budget.finalTotal) }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="currentTab === 'inventory'" class="p-4 space-y-4">
+        <div class="card p-4 bg-blue-50 border border-blue-100">
+            <h3 class="font-bold text-blue-800 mb-3 text-sm uppercase"><i class="fa-solid fa-box mr-1"></i> {{ editingItemIndex === null ? 'Cadastrar Item' : 'Editar Item' }}</h3>
+            <div class="space-y-2">
+                <input v-model="newItem.name" placeholder="Nome do Material" class="input-std">
+                <div class="grid grid-cols-2 gap-2">
+                    <input v-model.number="newItem.cost" type="number" placeholder="Custo R$" class="input-std">
+                    <input v-model.number="newItem.price" type="number" placeholder="Venda R$" class="input-std">
+                </div>
+                <input v-model.number="newItem.stock" type="number" placeholder="Quantidade Atual" class="input-std">
+                <button @click="saveItem" class="btn btn-primary mt-2">Salvar no Estoque</button>
+                <button v-if="editingItemIndex !== null" @click="cancelEditItem" class="text-xs text-gray-500 w-full mt-2 underline">Cancelar Edição</button>
+            </div>
+        </div>
+
+        <div v-for="(item, index) in inventory" :key="index" class="card p-3 flex justify-between items-center">
+            <div class="overflow-hidden">
+                <p class="font-bold text-slate-800 truncate">{{ item.name }}</p>
+                <p class="text-[10px] text-gray-500">Custo: {{ item.cost }} | Venda: {{ item.price }}</p>
+            </div>
+            <div class="flex items-center gap-3 pl-2">
+                <span class="font-mono font-bold bg-gray-100 px-2 py-1 rounded text-sm">{{ item.stock }}</span>
+                <div class="flex flex-col gap-1">
+                    <button @click="editItem(index)" class="text-blue-500 px-2"><i class="fa-solid fa-pen"></i></button>
+                    <button @click="deleteItem(index)" class="text-red-400 px-2"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="currentTab === 'settings'" class="p-4 space-y-4">
+        <div class="flex items-center gap-2 mb-2 text-gray-500 cursor-pointer" @click="currentTab = 'dashboard'">
+            <i class="fa-solid fa-arrow-left"></i> <span class="text-sm font-bold">Voltar</span>
+        </div>
+        
+        <h2 class="text-xl font-bold text-slate-800">Sua Empresa</h2>
+        
+        <div class="card p-4">
+            <label class="label-std">Nome da Empresa</label>
+            <input v-model="companySettings.name" placeholder="Ex: Fogo Show Pirotecnia" class="input-std" @change="saveSettings">
+            
+            <label class="label-std">Endereço Completo</label>
+            <input v-model="companySettings.address" placeholder="Rua, Cidade, Estado" class="input-std" @change="saveSettings">
+            
+            <label class="label-std">Blaster Responsável</label>
+            <input v-model="companySettings.blaster" placeholder="Seu Nome" class="input-std" @change="saveSettings">
+            
+            <label class="label-std">Contato / Telefone</label>
+            <input v-model="companySettings.phone" placeholder="(XX) 99999-9999" class="input-std" @change="saveSettings">
+            
+            <label class="label-std">Logo da Empresa</label>
+            <div class="flex items-center gap-3 mt-1">
+                <div v-if="companySettings.logo" class="w-16 h-16 border rounded bg-contain bg-center bg-no-repeat" :style="{backgroundImage: 'url('+companySettings.logo+')'}"></div>
+                <label class="bg-slate-200 text-slate-700 px-3 py-2 rounded text-xs font-bold cursor-pointer">
+                    <i class="fa-solid fa-upload mr-1"></i> Carregar Logo
+                    <input type="file" accept="image/*" @change="handleLogoUpload" class="hidden">
+                </label>
+                <button v-if="companySettings.logo" @click="companySettings.logo = ''; saveSettings()" class="text-red-400 text-xs underline">Remover</button>
+            </div>
+            <p class="text-[10px] text-gray-400 mt-1">A imagem será salva no navegador. Use imagens pequenas.</p>
+        </div>
+
+        <h2 class="text-xl font-bold text-slate-800 mt-6">Backup de Dados</h2>
+        <div class="card p-4 border-l-4 border-slate-500">
+            <p class="text-sm text-gray-600 mb-4">Salvar cópia de segurança:</p>
+            <button @click="exportData" class="btn bg-slate-800 text-white mb-3"><i class="fa-solid fa-download mr-2"></i> Baixar Backup</button>
+            <div class="relative">
+                <button class="btn bg-gray-200 text-slate-700"><i class="fa-solid fa-upload mr-2"></i> Restaurar Backup</button>
+                <input type="file" @change="importData" class="absolute inset-0 opacity-0 cursor-pointer">
+            </div>
+        </div>
+        
+        <button @click="fullReset" class="w-full text-red-500 text-sm py-4 underline">Apagar Tudo (Reset de Fábrica)</button>
+    </div>
+
+    <div v-if="viewingBudget" class="fixed inset-0 bg-white z-[60] overflow-y-auto pb-20 animate-fade-in">
+        <div class="bg-slate-900 text-white p-4 sticky top-0 flex justify-between items-center shadow-lg">
+            <button @click="closeBudgetDetails" class="text-sm"><i class="fa-solid fa-arrow-left mr-1"></i> Voltar</button>
+            <span class="font-bold text-sm">Detalhes</span>
+            <button @click="deleteBudget(viewingBudget.id)" class="text-red-400"><i class="fa-solid fa-trash"></i></button>
+        </div>
+
+        <div class="p-4 space-y-4">
+            <div class="text-center py-4 border-b border-gray-100">
+                <h2 class="text-2xl font-bold text-slate-800">{{ viewingBudget.clientName }}</h2>
+                <p class="text-gray-500 text-sm mt-1"><i class="fa-solid fa-location-dot mr-1"></i> {{ viewingBudget.location }}</p>
+                <p class="text-gray-500 text-sm"><i class="fa-regular fa-calendar mr-1"></i> {{ formatDate(viewingBudget.date) }}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button @click="generatePDF(viewingBudget)" class="btn bg-slate-700 text-white text-xs"><i class="fa-solid fa-file-pdf mr-1"></i> Gerar PDF</button>
+                <button v-if="viewingBudget.status === 'Pendente'" @click="changeStatus(viewingBudget, 'Confirmado')" class="btn bg-green-600 text-white text-xs"><i class="fa-solid fa-check mr-1"></i> Aprovar Venda</button>
+                <button v-if="viewingBudget.status === 'Confirmado'" @click="changeStatus(viewingBudget, 'Cancelado')" class="btn bg-red-100 text-red-600 text-xs border border-red-200">Cancelar Venda</button>
+            </div>
+
+            <div v-if="viewingBudget.status === 'Confirmado'" class="card border-2 border-green-500 bg-green-50 p-4">
+                <h3 class="font-bold text-green-800 border-b border-green-200 pb-2 mb-3 text-sm uppercase"><i class="fa-solid fa-clipboard-check mr-2"></i>Área Operacional</h3>
+                <button @click="addToCalendar(viewingBudget)" class="w-full bg-white border border-green-600 text-green-700 font-bold py-3 rounded mb-4 text-sm shadow-sm flex items-center justify-center">
+                    <i class="fa-brands fa-google mr-2"></i> Adicionar à Agenda
+                </button>
+                
+                <h4 class="font-bold text-xs text-green-800 mb-2 uppercase">Checklist</h4>
+                <div class="flex gap-2 mb-3">
+                    <input v-model="tempChecklistItem" :placeholder="editingChecklistIndex !== null ? 'Editando item...' : 'Adicionar item extra...'" class="input-std text-sm" @keyup.enter="saveChecklistItem">
+                    <button @click="saveChecklistItem" class="rounded px-3 shadow-sm transition text-white" :class="editingChecklistIndex !== null ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'"><i class="fa-solid" :class="editingChecklistIndex !== null ? 'fa-check' : 'fa-plus'"></i></button>
+                    <button v-if="editingChecklistIndex !== null" @click="cancelEditChecklist" class="bg-gray-400 text-white rounded px-3 shadow-sm"><i class="fa-solid fa-times"></i></button>
+                </div>
+
+                <div class="bg-white rounded-lg border border-green-100 overflow-hidden">
+                    <div v-for="(item, idx) in viewingBudget.checklist" :key="idx" class="flex justify-between items-center p-3 border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                        <div class="flex items-center flex-1 cursor-pointer" @click="item.checked = !item.checked; persistData()">
+                            <div class="w-5 h-5 border-2 rounded mr-3 flex items-center justify-center transition-colors flex-shrink-0" :class="item.checked ? 'bg-green-500 border-green-500' : 'border-gray-300'">
+                                <i v-if="item.checked" class="fa-solid fa-check text-white text-xs"></i>
+                            </div>
+                            <span class="text-sm text-gray-700 select-none" :class="{'line-through text-gray-400': item.checked}">{{ item.name }}</span>
+                        </div>
+                        <div class="flex gap-2 pl-2">
+                            <button @click.stop="prepareEditChecklist(idx)" class="text-blue-400 text-xs p-1"><i class="fa-solid fa-pen"></i></button>
+                            <button @click.stop="deleteChecklist(idx)" class="text-red-400 text-xs p-1"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-4">
+                <h3 class="font-bold text-slate-700 border-b pb-2 mb-3 text-sm uppercase">Financeiro</h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between text-gray-600"><span>Itens:</span> <span>R$ {{ formatMoney(getTotals(viewingBudget).materialsSale) }}</span></div>
+                    <div class="flex justify-between text-red-500"><span>Extras:</span> <span>- R$ {{ formatMoney(getTotals(viewingBudget).totalExtras) }}</span></div>
+                    <div class="flex justify-between text-blue-600"><span>Cachê:</span> <span>+ R$ {{ formatMoney(viewingBudget.cache) }}</span></div>
+                    <div class="border-t pt-2 mt-2 flex justify-between text-lg font-bold text-slate-800">
+                        <span>Total:</span>
+                        <span>R$ {{ formatMoney(viewingBudget.finalTotal) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="currentTab === 'create_budget'" class="p-4 pb-20 space-y-4">
+        <div class="flex items-center gap-2 mb-2 text-gray-500 cursor-pointer" @click="currentTab = 'dashboard'">
+            <i class="fa-solid fa-arrow-left"></i> <span class="text-sm font-bold">Cancelar</span>
+        </div>
+        <h2 class="text-xl font-bold text-slate-800 mb-4">Novo Orçamento</h2>
+
+        <div class="card p-4">
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">1. Dados do Evento</h3>
+            <div class="space-y-3">
+                <input v-model="newBudget.clientName" placeholder="Nome do Cliente" class="input-std">
+                <input v-model="newBudget.contact" placeholder="Telefone / Contato" class="input-std">
+                <input v-model="newBudget.location" placeholder="Local do Evento" class="input-std">
+                <input v-model="newBudget.date" type="date" class="input-std">
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">2. Materiais</h3>
+            <div class="flex gap-2 mb-3">
+                <select v-model="selectedItemIndex" class="input-std flex-1">
+                    <option value="" disabled>Selecionar Item...</option>
+                    <option v-for="(item, index) in inventory" :value="index">{{ item.name }} (Est: {{ item.stock }})</option>
+                </select>
+                <input v-model.number="qtyToAdd" type="number" class="input-std w-16 text-center" placeholder="Qtd">
+                <button @click="addItemToBudget" class="bg-slate-800 text-white rounded-lg px-4"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <ul v-if="newBudget.items.length > 0" class="divide-y divide-gray-100">
+                <li v-for="(item, idx) in newBudget.items" :key="idx" class="flex justify-between items-center py-2 text-sm">
+                    <span><b>{{ item.qty }}x</b> {{ item.name }}</span>
+                    <button @click="removeItemFromBudget(idx)" class="text-red-400 px-2"><i class="fa-solid fa-times"></i></button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card p-4">
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">3. Custos Extras</h3>
+            <div class="flex gap-2 mb-3">
+                <input v-model="tempExtraDesc" placeholder="Ex: Gasolina, Van..." class="input-std flex-1">
+                <input v-model.number="tempExtraValue" type="number" placeholder="R$" class="input-std w-20">
+                <button @click="addExtraCost" class="bg-slate-800 text-white rounded-lg px-4"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <ul class="divide-y divide-gray-100">
+                <li v-for="(cost, idx) in newBudget.extraCostsList" :key="idx" class="flex justify-between py-2 text-sm">
+                    <span>{{ cost.description }}</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-red-500 font-mono">- {{ cost.value }}</span>
+                        <button @click="removeExtraCost(idx)" class="text-gray-400"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card p-4 border-2 border-slate-800">
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-2">4. Fechamento</h3>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Seu Cachê Técnico</label>
+            <input v-model.number="newBudget.cache" type="number" class="input-std text-lg font-bold text-green-700" placeholder="R$ 0,00">
+            <div class="mt-4 pt-3 border-t border-gray-200 text-sm space-y-1">
+                <div class="flex justify-between text-lg font-bold mt-2 pt-2 border-t">
+                    <span>TOTAL GERAL:</span>
+                    <span>R$ {{ formatMoney(creationTotals.materialsSale + newBudget.cache) }}</span>
+                </div>
+            </div>
+        </div>
+        <button @click="saveBudget" class="btn btn-primary shadow-lg text-lg mb-8">SALVAR ORÇAMENTO</button>
+    </div>
+
+    <div class="nav-bar shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
+        <button @click="currentTab = 'dashboard'" class="nav-item" :class="{active: currentTab === 'dashboard'}">
+            <i class="fa-solid fa-chart-pie"></i> Painel
+        </button>
+        <button @click="currentTab = 'history'" class="nav-item" :class="{active: currentTab === 'history'}">
+            <i class="fa-solid fa-list-check"></i> Histórico
+        </button>
+        <button @click="currentTab = 'inventory'" class="nav-item" :class="{active: currentTab === 'inventory'}">
+            <i class="fa-solid fa-boxes-stacked"></i> Estoque
+        </button>
+    </div>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    const CONST_CHECKLIST = [
+        { name: 'Maletas / Detonadores', checked: false },
+        { name: 'Cabos de Disparo (Main)', checked: false },
+        { name: 'Extensões Elétricas', checked: false },
+        { name: 'Fita Crepe / Isolante', checked: false },
+        { name: 'Multímetro / Testador', checked: false },
+        { name: 'Alicate de Corte / Ferramentas', checked: false },
+        { name: 'EPIs (Óculos, Luvas, Capacete)', checked: false },
+        { name: 'Rádios Comunicadores', checked: false },
+        { name: 'Extintor de Incêndio', checked: false }
+    ];
+
+    const safeLoad = (key) => {
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw || raw === "undefined" || raw === "null") return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            console.error("Reset:", key);
+            return [];
+        }
+    };
+    
+    // Carrega configs ou padrão vazio
+    const loadSettings = () => {
+        try {
+            const raw = localStorage.getItem('bm3_settings');
+            return raw ? JSON.parse(raw) : { name: '', address: '', blaster: '', phone: '', logo: '' };
+        } catch(e) { return { name: '', address: '', blaster: '', phone: '', logo: '' }; }
+    };
+
+    createApp({
+        data() {
+            return {
+                currentTab: 'dashboard',
+                filterStatus: 'all',
+                viewingBudget: null,
+                inventory: safeLoad('bm3_inventory'),
+                budgets: safeLoad('bm3_budgets'),
+                companySettings: loadSettings(),
+                
+                newItem: { name: '', cost: '', price: '', stock: '' },
+                editingItemIndex: null,
+                selectedItemIndex: '',
+                qtyToAdd: 1,
+                tempExtraDesc: '',
+                tempExtraValue: '',
+                tempChecklistItem: '',
+                editingChecklistIndex: null,
+                newBudget: { id: null, clientName: '', contact: '', location: '', date: '', items: [], extraCostsList: [], cache: 0, status: 'Pendente', checklist: JSON.parse(JSON.stringify(CONST_CHECKLIST)) }
+            }
+        },
+        mounted() {
+            const loader = document.getElementById('loading-screen');
+            if(loader) loader.style.display = 'none';
+        },
+        computed: {
+            kpis() {
+                const confirmed = this.budgets.filter(b => b.status === 'Confirmado');
+                const pending = this.budgets.filter(b => b.status === 'Pendente');
+                const totalProfit = confirmed.reduce((acc, b) => acc + (b.netProfit || 0), 0);
+                const pendingValue = pending.reduce((acc, b) => acc + (b.finalTotal || 0), 0);
+                return { totalProfit, confirmedCount: confirmed.length, pendingCount: pending.length, pendingValue };
+            },
+            nextShow() {
+                const future = this.budgets.filter(b => b.status === 'Confirmado' && new Date(b.date) >= new Date().setHours(0,0,0,0)).sort((a, b) => new Date(a.date) - new Date(b.date));
+                return future.length ? future[0] : null;
+            },
+            filteredBudgets() {
+                let list = this.budgets.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+                if(this.filterStatus !== 'all') list = list.filter(b => b.status === this.filterStatus);
+                return list;
+            },
+            creationTotals() {
+                const materialsSale = this.newBudget.items.reduce((acc, i) => acc + (i.price * i.qty), 0);
+                const materialsCost = this.newBudget.items.reduce((acc, i) => acc + (i.cost * i.qty), 0);
+                const totalExtras = this.newBudget.extraCostsList.reduce((acc, c) => acc + c.value, 0);
+                return { materialsSale, materialsCost, totalExtras };
+            }
+        },
+        methods: {
+            formatMoney(val) { return (val || 0).toFixed(2).replace('.', ','); },
+            formatDate(d) { if(!d) return '-'; return d.split('-').reverse().join('/'); },
+            getDaysUntil(date) { return Math.ceil((new Date(date) - new Date()) / (1000 * 60 * 60 * 24)); },
+            getTotals(budget) {
+                const materialsSale = (budget.items || []).reduce((acc, i) => acc + (i.price * i.qty), 0);
+                const totalExtras = (budget.extraCostsList || []).reduce((acc, c) => acc + c.value, 0);
+                return { materialsSale, totalExtras };
+            },
+
+            // --- SETTINGS & LOGO ---
+            saveSettings() {
+                localStorage.setItem('bm3_settings', JSON.stringify(this.companySettings));
+            },
+            handleLogoUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                // Limite de tamanho (ex: 500kb para não travar o storage)
+                if (file.size > 500000) {
+                    alert("A imagem é muito grande. Tente uma menor que 500kb.");
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.companySettings.logo = e.target.result;
+                    this.saveSettings();
+                };
+                reader.readAsDataURL(file);
+            },
+
+            // --- BACKUP ---
+            exportData() {
+                const data = { inventory: this.inventory, budgets: this.budgets, settings: this.companySettings, version: '3.8' };
+                const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `BlasterMgr_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+            },
+            importData(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if(data.inventory && data.budgets) {
+                            if(confirm("Substituir dados atuais?")) {
+                                this.inventory = data.inventory; this.budgets = data.budgets;
+                                if(data.settings) this.companySettings = data.settings;
+                                this.persistData(); this.saveSettings();
+                                alert("Sucesso!");
+                            }
+                        } else alert("Arquivo inválido.");
+                    } catch(err) { alert("Erro arquivo."); }
+                };
+                reader.readAsText(file);
+            },
+            fullReset() { if(confirm("Apagar TUDO?")) { localStorage.clear(); location.reload(); } },
+
+            // --- CHECKLIST ---
+            saveChecklistItem() {
+                if(!this.tempChecklistItem) return;
+                if (this.editingChecklistIndex !== null) { this.viewingBudget.checklist[this.editingChecklistIndex].name = this.tempChecklistItem; this.editingChecklistIndex = null; } 
+                else { this.viewingBudget.checklist.push({ name: this.tempChecklistItem, checked: false }); }
+                this.tempChecklistItem = ''; this.persistData();
+            },
+            prepareEditChecklist(index) { this.tempChecklistItem = this.viewingBudget.checklist[index].name; this.editingChecklistIndex = index; },
+            cancelEditChecklist() { this.tempChecklistItem = ''; this.editingChecklistIndex = null; },
+            deleteChecklist(index) { if(confirm('Excluir?')) { this.viewingBudget.checklist.splice(index, 1); if(this.editingChecklistIndex === index) this.cancelEditChecklist(); this.persistData(); } },
+
+            // --- CORE ---
+            startNewBudget() { this.newBudget = { id: null, clientName: '', contact: '', location: '', date: '', items: [], extraCostsList: [], cache: 0, status: 'Pendente', checklist: JSON.parse(JSON.stringify(CONST_CHECKLIST)) }; this.currentTab = 'create_budget'; },
+            addItemToBudget() { if(this.selectedItemIndex === '') return; const stockItem = this.inventory[this.selectedItemIndex]; this.newBudget.items.push({ name: stockItem.name, cost: stockItem.cost, price: stockItem.price, qty: this.qtyToAdd, originalName: stockItem.name }); this.qtyToAdd = 1; },
+            removeItemFromBudget(idx) { this.newBudget.items.splice(idx, 1); },
+            addExtraCost() { if(!this.tempExtraDesc || !this.tempExtraValue) return; this.newBudget.extraCostsList.push({ description: this.tempExtraDesc, value: this.tempExtraValue }); this.tempExtraDesc = ''; this.tempExtraValue = ''; },
+            removeExtraCost(idx) { this.newBudget.extraCostsList.splice(idx, 1); },
+            saveBudget() { if(!this.newBudget.clientName) return alert('Cliente?'); const t = this.creationTotals; const f = t.materialsSale + this.newBudget.cache; const n = (t.materialsSale - t.materialsCost) + this.newBudget.cache - t.totalExtras; this.budgets.push({ ...this.newBudget, id: Date.now(), finalTotal: f, netProfit: n }); this.persistData(); this.currentTab = 'dashboard'; },
+            openBudgetDetails(b) { if(!b.checklist) b.checklist = JSON.parse(JSON.stringify(CONST_CHECKLIST)); if(!b.extraCostsList) b.extraCostsList = b.extraCosts ? [{description:'Geral',value:b.extraCosts}] : []; this.viewingBudget = b; this.cancelEditChecklist(); },
+            closeBudgetDetails() { this.viewingBudget = null; },
+            changeStatus(b, s) { if(b.status===s)return; if(s==='Confirmado'){ let err=null; b.items.forEach(i=>{ const inv=this.inventory.find(v=>v.name===i.name); if(!inv||inv.stock<i.qty)err=i.name; }); if(err)return alert(`Falta: ${err}`); b.items.forEach(i=>{ const inv=this.inventory.find(v=>v.name===i.name); if(inv)inv.stock-=i.qty; }); } else if(b.status==='Confirmado'){ b.items.forEach(i=>{ const inv=this.inventory.find(v=>v.name===i.name); if(inv)inv.stock+=i.qty; }); } b.status=s; this.persistData(); },
+            deleteBudget(id) { if(confirm('Excluir?')) { this.budgets = this.budgets.filter(b => b.id !== id); this.persistData(); this.closeBudgetDetails(); } },
+            saveItem() { if(!this.newItem.name) return; if(this.editingItemIndex !== null) { this.inventory[this.editingItemIndex] = {...this.newItem}; this.editingItemIndex = null; } else { this.inventory.push({...this.newItem}); } this.newItem={name:'',cost:'',price:'',stock:''}; this.persistData(); },
+            editItem(i) { this.newItem = {...this.inventory[i]}; this.editingItemIndex = i; window.scrollTo({ top:0, behavior:'smooth'}); },
+            cancelEditItem() { this.newItem={name:'',cost:'',price:'',stock:''}; this.editingItemIndex = null; },
+            deleteItem(i) { if(confirm('Excluir?')) { this.inventory.splice(i,1); this.persistData(); } },
+            persistData() { localStorage.setItem('bm3_inventory', JSON.stringify(this.inventory)); localStorage.setItem('bm3_budgets', JSON.stringify(this.budgets)); },
+            addToCalendar(b) { const t=encodeURIComponent(`Show: ${b.clientName}`); const d=encodeURIComponent(`Local: ${b.location}\nContato: ${b.contact}`); const dt=b.date.replace(/-/g,'')+'/'+b.date.replace(/-/g,''); window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${t}&details=${d}&dates=${dt}`, '_blank'); },
+            
+            // --- PDF ENGINE ---
+            generatePDF(budget) {
+                const { jsPDF } = window.jspdf || {};
+                if (!jsPDF) return alert("Erro PDF.");
+                const doc = new jsPDF();
+                const totals = this.getTotals(budget);
+                const s = this.companySettings;
+
+                // --- CABEÇALHO ---
+                // Se tiver logo
+                let headerTextX = 14;
+                if (s.logo) {
+                    try {
+                        doc.addImage(s.logo, 'JPEG', 14, 10, 25, 25);
+                        headerTextX = 45; // Empurra texto pra direita
+                    } catch(e) { console.error("Erro Logo", e); }
+                }
+
+                // Dados da Empresa (Lado da Logo ou Esquerda)
+                doc.setTextColor(30, 41, 59);
+                doc.setFontSize(18);
+                doc.setFont("helvetica", "bold");
+                doc.text(s.name || "ORÇAMENTO", headerTextX, 18);
+                
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "normal");
+                if(s.address) doc.text(s.address, headerTextX, 24);
+                if(s.phone) doc.text(`Contato: ${s.phone}`, headerTextX, 29);
+                if(s.blaster) doc.text(`Responsável Técnico: ${s.blaster}`, headerTextX, 34);
+
+                // Título do Documento
+                doc.setFontSize(22);
+                doc.setTextColor(220, 38, 38);
+                doc.text("ORÇAMENTO", 200, 20, { align: "right" });
+                
+                doc.setDrawColor(200, 200, 200);
+                doc.line(14, 40, 196, 40);
+
+                // Dados Cliente
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "bold");
+                doc.text("DADOS DO EVENTO:", 14, 50);
+                doc.setFont("helvetica", "normal");
+                doc.text(`Cliente: ${budget.clientName}`, 14, 56);
+                doc.text(`Data: ${this.formatDate(budget.date)}`, 14, 61);
+                doc.text(`Local: ${budget.location}`, 14, 66);
+                doc.text(`Contato: ${budget.contact}`, 14, 71);
+
+                // Tabela
+                const tableBody = budget.items.map(i => [i.qty, i.name, `R$ ${i.price.toFixed(2)}`, `R$ ${(i.price * i.qty).toFixed(2)}`]);
+                doc.autoTable({ startY: 80, head: [['Qtd', 'Material', 'Unitário', 'Total']], body: tableBody, theme: 'striped', headStyles: { fillColor: [30, 41, 59] } });
+
+                let finalY = doc.lastAutoTable.finalY + 10;
+                
+                // Extras
+                if(budget.extraCostsList && budget.extraCostsList.length > 0) {
+                    doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text("Logística / Extras:", 14, finalY);
+                    doc.setFont("helvetica", "normal");
+                    budget.extraCostsList.forEach(cost => { finalY += 5; doc.text(`${cost.description}: R$ ${cost.value.toFixed(2)}`, 14, finalY); });
+                    finalY += 10;
+                }
+
+                // Totais
+                doc.line(14, finalY, 196, finalY); finalY += 7;
+                doc.setFont("helvetica", "bold"); 
+                doc.text(`TOTAL MATERIAIS: R$ ${totals.materialsSale.toFixed(2)}`, 14, finalY);
+                finalY += 5; doc.text(`CACHÊ TÉCNICO: R$ ${(budget.cache || 0).toFixed(2)}`, 14, finalY);
+                
+                finalY += 10; 
+                doc.setFillColor(240, 240, 240); 
+                doc.rect(14, finalY-6, 90, 14, 'F');
+                doc.setFontSize(14); 
+                doc.setTextColor(220, 38, 38); 
+                doc.text(`TOTAL: R$ ${(budget.finalTotal || 0).toFixed(2)}`, 16, finalY+3);
+
+                // Assinatura (Rodapé)
+                const pageHeight = doc.internal.pageSize.height;
+                doc.setDrawColor(0,0,0);
+                doc.line(14, pageHeight - 30, 90, pageHeight - 30);
+                doc.setFontSize(8);
+                doc.setTextColor(100,100,100);
+                doc.text(s.blaster || "Assinatura do Responsável", 14, pageHeight - 25);
+                
+                doc.save(`Orcamento_${budget.clientName.replace(/\s+/g, '_')}.pdf`);
+            }
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
